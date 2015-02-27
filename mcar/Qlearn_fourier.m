@@ -3,7 +3,7 @@ function [Q, iters] = Qlearn_fourier(num_episodes, num_features)
 lambda = 0.9;
 explore_rate = 0.0;
 discount = 1;
-learning_rate = 0.1;
+learning_rate = 0.01;
 
 POS_RANGE = [-1.20, 0.5];
 VEL_RANGE = [-0.07, 0.07];
@@ -37,7 +37,13 @@ for i = 1:num_episodes
         traces(:, action) = traces(:, action) + oldF;
         
         weights = weights + learning_rate*delta*traces;
-        
+        if action == 1
+            plot(state(1), state(2),'bo');
+        elseif action == 2
+            plot(state(1), state(2),'rx');
+        else
+            plot(state(1), state(2),'g+');
+        end
         if rand()>explore_rate
             action = nextaction;
         else
@@ -46,14 +52,9 @@ for i = 1:num_episodes
         state = newstate;
         iter = iter + 1;
         oldF = newF;
-        if action == 1
-            plot(state(1), state(2),'bo');
-        elseif action == 2
-            plot(state(1), state(2),'rx');
-        else
-            plot(state(1), state(2),'g+');
-        end
+        
     end
+    clf;
     iters(i) = iter;
     fprintf('Episode %d took %d iterations\n',i,iter);
 end
@@ -67,7 +68,7 @@ function Q = generateQ()
     [ps,vs] = meshgrid(linspace(-1.2,0.5,size(Q,1)),linspace(-0.07,0.07,size(Q,2)));
     for p = 1:size(Q,1)
         for v = 1:size(Q,2)
-            Q(p,v,actions) = approxQ(project([ps(p),vs(v)]),actions);
+            Q(p,v,actions) = approxQ(fourier_approx([ps(p),vs(v)]),actions);
         end
     end
 end
