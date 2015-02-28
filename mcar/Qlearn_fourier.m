@@ -1,66 +1,68 @@
 function [Q, iters] = Qlearn_fourier(num_episodes, num_features)
 
-lambda = 0.9;
-explore_rate = 0.0;
 discount = 1;
+lambda = 0.9;
 learning_rate = 0.01;
+exploration_rate = 0;
 
-POS_RANGE = [-1.20, 0.5];
+POS_RANGE = [-1.2, 0.5];
 VEL_RANGE = [-0.07, 0.07];
 
 features = fourier_features(num_features);
+
 actions = [1, 2, 3];
-
 weights = zeros(num_features, length(actions));
-
-iters = zeros(num_episodes, 1);
-for i = 1:num_episodes
-    figure(1);
-    hold on;
-    traces = zeros(num_features, length(actions));
-    [state, ~, simEnd] = mcar_simulation();
-    action = actions(randi(length(actions)));
-    oldF = fourier_approx(state);
+iters = zeros(num_episodes,1);
+toPlot = 0;
+for episode = 1:num_episodes
     iter = 0;
-    while ~simEnd
-        [newstate, reward, simEnd] = mcar_simulation(state, action);
+    if toPlot
+        figure(episode);
+        hold on;
+    end
+    [state, ~, isDone] = mcar_simulation();
+    action = randsample(actions,1,true);
+    traces = zeros(num_features, length(actions));
+    
+    oldF = fourier_approx(state);
+    while ~isDone
+        [newstate, reward, isDone] = mcar_simulation(state, action);
         newF = fourier_approx(newstate);
         
-        [maxQ, nextaction] = max(approxQ(newF, actions));
-        
+        [maxQ, nextAction] = max(approxQ(newF, actions));
         delta = reward - approxQ(oldF, action);
         
-        if ~simEnd, delta = delta + discount*maxQ;
-        end
+        if ~isDone, delta = delta + maxQ; end
         
-        traces = discount*lambda*traces;
-        traces(:, action) = traces(:, action) + oldF;
+        traces = discount*traces*lambda;
+        traces(:,action) = traces(:,action) + oldF;
         
         weights = weights + learning_rate*delta*traces;
-        if action == 1
-            plot(state(1), state(2),'bo');
-        elseif action == 2
-            plot(state(1), state(2),'rx');
-        else
-            plot(state(1), state(2),'g+');
+        
+        if toPlot
+            if action == 1
+                plot(state(1), state(2), 'bo');
+            elseif action == 2
+                plot(state(1), state(2), 'rx');
+            else
+                plot(state(1), state(2), 'g+');
+            end
         end
-        if rand()>explore_rate
-            action = nextaction;
+        
+        if rand() > exploration_rate
+            action = nextAction;
         else
-            action = actions(randi(length(actions)));
+            action = randsample(actions,1);
         end
         state = newstate;
-        iter = iter + 1;
         oldF = newF;
-        
+        iter = iter+1;
     end
-    clf;
-    iters(i) = iter;
-    fprintf('Episode %d took %d iterations\n',i,iter);
+    iters(episode) = iter;
+    fprintf('Episode %d completed in %d iterrations\n',episode, iter);
 end
 Q = generateQ();
-return;
-
+return
 %%% Functions %%%
 
 function Q = generateQ()
