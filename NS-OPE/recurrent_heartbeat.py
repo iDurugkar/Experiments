@@ -5,65 +5,66 @@ import theano.tensor as T
 from math import sqrt
 
 from lasagne.layers import *
-from lasagne.regularization import regularize_network_params, l2
 import lasagne
 from lasagne import nonlinearities
+
+import cPickle
 
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-with open('Data2/IWRs/IWRs_out0.txt', 'r') as fp:
-    text = fp.read()
-dataset = [float(tok) for tok in text.split()]
-
-evals = []
-ind = []
-
-with open('Data2/trueEval.txt', 'r') as fr:
-    fr.readline()
-    for line in fr.readlines():
-        parts = line.split()
-        ind.append(int(parts[0]))
-        evals.append(float(parts[-1]))
-    # evals = [float(line.split()[-1]) for line in fr.readlines()]
-sequence_size = 2000
+f = file('Heart_beats/waveforms.pkl')
+dataset = cPickle.load(f)
 
 dataset = np.asarray(dataset, dtype=theano.config.floatX)
-normalizer = dataset.min() * -1
-dataset /= normalizer
+sequence_size = 400
+
+threshold = dataset.min()
+dataset -= threshold
+drift = np.asarray([np.log(i+1) for i in range(sequence_size)], dtype=theano.config.floatX)
+drift /= np.log(sequence_size)
+
+
+# dataset /= normalizer
 # plt.plot(dataset)
 # plt.show()
-full_data = dataset.reshape((1,-1))
-full_train = np.copy(full_data[:, :-1])
-full_targets = np.copy(full_data[:, 1:])
 
-# dataset = dataset.reshape((-1, sequence_size), order='F')
-# dataset = dataset.reshape((1, -1))
+# full_data = dataset.reshape((1,-1))
+# full_train = np.copy(full_data[:, :-1])
+# full_targets = np.copy(full_data[:, 1:])
 
-num_examples, sequence_size = full_data.shape
+dataset = dataset.reshape((-1, sequence_size), order='C') # Order = 'F' if you want column wise
+# dataset = np.add(dataset, drift)
+dataset /= dataset.max()
 
-# num_train = dataset[:].shape[0]
+# plt.plot(dataset[0])
+# plt.show()
+
+num_examples, sequence_size = dataset.shape
+num_test = int(0.2*num_examples)
+num_train = num_examples - num_test
+
+# num_train = dataset[2:].shape[0]
 # num_test = dataset[:2].shape[0]
 
-# train = np.copy(dataset[:, :-1]) #  theano.shared(np.asarray(dataset[:-10, :], dtype=theano.config.floatX))
+train = np.copy(dataset[num_test:, :-5]) #  theano.shared(np.asarray(dataset[:-10, :], dtype=theano.config.floatX))
                       #borrow=True)
-# train_targets = np.copy(dataset[:, 1:])
+train_targets = np.copy(dataset[num_test:, 5:])
 # train_targets = np.zeros_like(dataset[:-10])
 # train_targets[:, 1:] = dataset[:-10, :-1]
 # train_targets = theano.shared(np.asarray(train_targets, dtype=theano.config.floatX),
 #                              borrow=True)
 
-# test = np.copy(dataset[:2, :-1]) #  theano.shared(np.asarray(dataset[-10:], dtype=theano.config.floatX))
+test = np.copy(dataset[:num_test, :-5]) #  theano.shared(np.asarray(dataset[-10:], dtype=theano.config.floatX))
                      #borrow=True)
-# test_targets = np.copy(dataset[:2, 1:])
+test_targets = np.copy(dataset[:num_test, 5:])
 # test_targets = np.zeros_like(dataset[-10:])
 # test_targets[:, 1:] = dataset[-10:, :-1]
 # test_targets = theano.shared(np.asarray(test_targets, dtype=theano.config.floatX),
 #                               borrow=True)
 
-num_units = 1
-num_units2 = 2
+num_units = 5
 num_inputs = 1
 num_outputs = 1
 
@@ -82,16 +83,14 @@ def build_net(inputVar):
     # batch_size, sequence_length, _ = l_rshp1.output_shape
 
     # The LSTM layer!
-    # forget_gate = Gate(b=lasagne.init.Constant(0.3))
-    l_lstm = GRULayer(l_rshp1, num_units=num_units, learn_init=True)  # , forgetgate=forget_gate)
-
-    # l_lstm2 = LSTMLayer(l_lstm, num_units=num_units2, learn_init=True)  # , forgetgate=forget_gate)
+    # forget_gate = Gate(b=lasagne.init.Constant(1.3))
+    # l_lstm = LSTMLayer(l_rshp1, num_units=num_outputs)  # , forgetgate=forget_gate)
 
     # Basic RNN
     # l_lstm = RecurrentLayer(l_rshp1, num_units=num_outputs, nonlinearity=nonlinearities.tanh) # num_units
 
     # GRU layer
-    # l_lstm = GRULayer(l_rshp1, num_units=num_units)
+    l_lstm = GRULayer(l_rshp1, num_units=num_units)
     # Flatten output of batch and sequence so that each time step
     # of each sequence is processed independently.
     # Didn't understand this part :/
@@ -102,18 +101,12 @@ def build_net(inputVar):
     return l_out, l_lstm
 
 network, lstm = build_net(input_var)
-save_network, _ = build_net(input_var)
 
 # temp = train[1:2]
 
 prediction = lasagne.layers.get_output(network)
-# TODO: Replace input regularization with prev_prediction regularization
 loss = lasagne.objectives.squared_error(prediction, target_var)
-# reg = lasagne.objectives.squared_error(prediction, input_var)
-# reg = reg.mean() * 0.03
-# reg = regularize_network_params(network, l2) * 0.01
-loss = loss.mean()  # + reg
-
+loss = loss.mean()
 
 params = lasagne.layers.get_all_params(network, trainable=True)
 updates = lasagne.updates.adagrad(loss, params, learning_rate=0.1)
@@ -137,23 +130,18 @@ index = T.scalar(name='index', dtype='int64')
 train_fn = theano.function([input_var, target_var], loss, updates=updates, allow_input_downcast=True)
 val_fn = theano.function([input_var, target_var], test_loss, allow_input_downcast=True)
 
-num_epochs = 3000
-min_err = float('inf')
-
+num_epochs = 30
 for epoch in range(num_epochs):
     # err = np.zeros((1, num_train), dtype=theano.config.floatX)
     # for i in range(num_train):
-    err = train_fn(full_train, full_targets)
-    if err < min_err:
-        min_err = err
-        set_all_param_values(save_network, get_all_param_values(network))
+    err = train_fn(train, train_targets)
     print('Epoch %d, Error %f' % (epoch, err))
 
-# pred_err = val_fn(test, test_targets)
-# print('Test error: %f' % pred_err)
+pred_err = val_fn(test, test_targets)
+print('Test error: %f' % pred_err)
 
 
-out = get_output(save_network)
+out = get_output(network)
 get_it = theano.function([input_var], out, allow_input_downcast=True)
 # with open('results.txt', 'w') as fw:
 #     for i in range(num_train):
@@ -168,32 +156,20 @@ get_it = theano.function([input_var], out, allow_input_downcast=True)
 
 final_error = 0.
 abs_error = 0.
-got_it = get_it(full_data)
-with open('Data2/results_2n.txt', 'w') as fw:
-    # for i in range(full_train.shape[1]):
-    #     if i % 500 == 0:
-    for i in range(1, len(ind)):
-        pred = (got_it[0, ind[i]-1] * normalizer)
-        error = (pred - evals[i])
-        final_error += error ** 2
-        abs_error += abs(error)
-        fw.writelines([str(ind[i]) + ' ' + str(pred) + '\n'])
-mean_final_error = final_error / len(evals)
-mean_abs = abs_error / len(evals)
+got_it = get_it(np.reshape(test[0], (1, -1)))
+# with open('results.txt', 'w') as fw:
+#     for i in range(test.shape[1]):
+#         if i % 500 == 0:
+#             final_error += ((got_it[0,i] * normalizer) - evals[i/500]) ** 2
+#             abs_error += abs((got_it[0,i] * normalizer) - evals[i/500])
+#             fw.writelines([str(i) + ' ' + str(got_it[0, i] * normalizer) + '\n'])
+# mean_final_error = final_error / len(evals)
+# mean_abs = abs_error / len(evals)
 
 
-print('root mean squared error = %f' % sqrt(mean_final_error))
-print('Absolute error = %f' % mean_abs)
-print('Final Prediction = %f' % (got_it[0, -1] * normalizer))
-print(got_it[0, -5:] * normalizer)
-
-
-plt.plot(full_train[0])
+# print('mean squared error = %f' % sqrt(mean_final_error))
+# print('Absolut error = %f' % mean_abs)
+plt.plot(test_targets[0])
 plt.plot(got_it[0], linestyle='--', color='r')
-plt.show()
-
-plt.clf()
-plt.plot(got_it[0]*normalizer, color='r')
-plt.plot(ind, evals, linestyle='-', color='b')
 plt.show()
 # plt.savefig('mars_10_500_nd.png')
