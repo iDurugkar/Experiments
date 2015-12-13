@@ -1,22 +1,15 @@
-__author__ = 'idurugkar'
 import numpy as np
 import theano
 import theano.tensor as T
-from math import sqrt
 import os
 import sys
 
 from lasagne.layers import *
 import lasagne
-from lasagne import nonlinearities
 
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-
+__author__ = 'idurugkar'
 
 num_units = 1
-num_units2 = 2
 num_inputs = 1
 num_outputs = 1
 
@@ -24,40 +17,26 @@ input_var = T.matrix(name='inputs', dtype=theano.config.floatX)
 target_var = T.matrix(name='targets', dtype=theano.config.floatX)
 
 
-def build_net(inputVar):
-    # Batch size=None, Sequence_Length=None, number of inputs = num_inputs
-    l_inp = InputLayer((None, sequence_size), input_var=inputVar)  # ((None, None, 1))
+def build_net(inputs):
+    l_inp = InputLayer((None, sequence_size), input_var=inputs)  # ((None, None, 1))
     # retrieve symbolic references to batch_size and sequence_length
     batch_size, sequence_length = l_inp.input_var.shape
     l_rshp1 = ReshapeLayer(l_inp, (batch_size, sequence_length, 1))
 
-    # retrieve symbolic references to batch_size and sequence_length
-    # batch_size, sequence_length, _ = l_rshp1.output_shape
-
-    # The LSTM layer!
-    # forget_gate = Gate(b=lasagne.init.Constant(0.3))
-    l_lstm = GRULayer(l_rshp1, num_units=num_units, learn_init=True)  # , forgetgate=forget_gate)
-
-    l_lstm2 = LSTMLayer(l_lstm, num_units=num_units2, learn_init=True)  # , forgetgate=forget_gate)
-
-    # Basic RNN
-    # l_lstm = RecurrentLayer(l_rshp1, num_units=num_outputs, nonlinearity=nonlinearities.tanh) # num_units
-
-    # GRU layer
-    # l_lstm = GRULayer(l_rshp1, num_units=num_units)
+    l_recurr = GRULayer(l_rshp1, num_units=num_units, learn_init=True)
     # Flatten output of batch and sequence so that each time step
     # of each sequence is processed independently.
     # Didn't understand this part :/
-    l_rshp2 = ReshapeLayer(l_lstm2, (-1, num_units2))
+    l_rshp2 = ReshapeLayer(l_recurr, (-1, num_units))
     l_dense = DenseLayer(l_rshp2, num_units=num_outputs, nonlinearity=None)
     l_out = ReshapeLayer(l_dense, (batch_size, sequence_length))
 
-    return l_out, l_lstm
+    return l_out
 
-resultsFile = 'Data2/results_MGL2_3_29.txt'
+resultsFile = 'Data2/results_basic.txt'
 # with open(resultsFile, 'w') as rf:
 #     rf.writelines(['File\tPrediction\n'])
-overallFile = 'Data2/overall_MGL2_3_29.txt'
+overallFile = 'Data2/overall_basic.txt'
 # with open(overallFile, 'w') as ro:
 #     ro.writelines(['File\tMSE\tAbs\n'])
 
@@ -77,20 +56,17 @@ count = 0
 # dataset = []
 
 for root, folder, files in os.walk('Data2/IWRs'):
-    for f_i in range(3,30):
-    # for f in files:
-    #     if f.startswith('.'):
-    #         continue
+    for f_i in range(62,100):
+        # for f in files:
+        #     if f.startswith('.'):
+        #         continue
         with open('Data2/IWRs/IWRs_out%d.txt' % f_i, 'r') as fp:
             text = fp.read()
         dataset = [float(tok) for tok in text.split()]
         # break
 
-# plt.plot(evals)
-# plt.show()
-
         dataset = np.asarray(dataset, dtype=theano.config.floatX)
-        normalizer = dataset.min()
+        normalizer = dataset.min() * -1
         dataset /= normalizer
         dataset = dataset.reshape((1, -1))
         full_train = np.copy(dataset[:, :-1])
@@ -102,18 +78,8 @@ for root, folder, files in os.walk('Data2/IWRs'):
 
         num_examples, sequence_size = dataset.shape
 
-        # num_train = dataset[2:].shape[0]
-        # num_test = dataset[:2].shape[0]
-
-        # train = np.copy(dataset[2:, :-1]) #  theano.shared(np.asarray(dataset[:-10, :], dtype=theano.config.floatX))
-                              #borrow=True)
-        # train_targets = np.copy(dataset[2:, 1:])
-
-        # test = np.copy(dataset[:2, :-1]) #  theano.shared(np.asarray(dataset[-10:], dtype=theano.config.floatX))
-                                     #borrow=True)
-        # test_targets = np.copy(dataset[:2, 1:])
-
-        network, lstm = build_net(input_var)
+        network = build_net(input_var)
+        save_network = build_net(input_var)
 
         # temp = train[1:2]
 
@@ -127,11 +93,9 @@ for root, folder, files in os.walk('Data2/IWRs'):
         updates = lasagne.updates.adagrad(loss, params, learning_rate=0.1)
         # updates = lasagne.updates.adadelta(loss, params, learning_rate=0.1, rho=0.99)
 
-
         # generate_output = get_output(network, deterministic=True)
         test_prediction = get_output(network, deterministic=True)
-        test_loss = lasagne.objectives.squared_error(test_prediction,
-                                                                target_var)
+        test_loss = lasagne.objectives.squared_error(test_prediction, target_var)
         test_loss = test_loss.mean()
 
         index = T.scalar(name='index', dtype='int64')
@@ -148,18 +112,24 @@ for root, folder, files in os.walk('Data2/IWRs'):
 
         # p = [i*gap for i in range(selection_range)]
         # print p
+        min_err = float('inf')
+        min_epoch = 0
 
-        num_epochs = 1000
+        num_epochs = 3000
         for epoch in range(num_epochs):
             err = train_fn(full_train, full_targets)
+            if err < min_err:
+                set_all_param_values(save_network, get_all_param_values(network))
+                min_err = err
+                min_epoch = epoch
             print('Epoch %d, Error %f' % (epoch, err))
             sys.stdout.flush()
 
         # pred_err = val_fn(test, test_targets)
         # print('Test error: %f' % pred_err)
 
-
-        out = get_output(network)
+        print('Generating output based on epoch %d at error: %f' % (min_epoch, min_err))
+        out = get_output(save_network)
         get_it = theano.function([input_var], out, allow_input_downcast=True)
 
         got_it = get_it(dataset)
@@ -192,4 +162,3 @@ for root, folder, files in os.walk('Data2/IWRs'):
 
 MSE /= count
 print('Final MSE: %f' % MSE)
-
