@@ -56,7 +56,7 @@ count = 0
 # dataset = []
 
 for root, folder, files in os.walk('Data2/IWRs'):
-    for f_i in range(62,100):
+    for f_i in range(83,100):
         # for f in files:
         #     if f.startswith('.'):
         #         continue
@@ -140,7 +140,7 @@ for root, folder, files in os.walk('Data2/IWRs'):
 
         print('File %d prediction = %f' % (f_i, (got_it[0, -1]*normalizer)))
         print('Target: %f' % evals[-1])
-        with open(resultsFile, 'a') as rf:
+        with open(resultsFile, 'a+') as rf:
             rf.writelines(['%d\t%f\n' % (f_i, (got_it[0, -1]*normalizer))])
 
         final_error = 0.
@@ -152,7 +152,7 @@ for root, folder, files in os.walk('Data2/IWRs'):
             abs_error += abs(error)
         mean_final_error = final_error / len(evals)
         mean_abs = abs_error / len(evals)
-        with open(overallFile, 'a') as ro:
+        with open(overallFile, 'a+') as ro:
             ro.writelines(['%d\t%f\t%f\n' % (f_i, mean_final_error, mean_abs)])
 
         # for i in range(full_train.shape[0]):

@@ -63,12 +63,15 @@ num_examples, sequence_size = full_data.shape
 #                               borrow=True)
 
 num_units = 1
-num_units2 = 2
+num_units2 = 1
 num_inputs = 1
 num_outputs = 1
 
 input_var = T.matrix(name='inputs', dtype=theano.config.floatX)
 target_var = T.matrix(name='targets', dtype=theano.config.floatX)
+
+final_predictions = []
+got_it = np.zeros((10, sequence_size))
 
 
 def build_net(inputVar):
@@ -78,6 +81,7 @@ def build_net(inputVar):
     l_rshp1 = ReshapeLayer(l_inp, (batch_size, sequence_length, 1))
 
     l_recurr = GRULayer(l_rshp1, num_units=num_units, learn_init=True)
+    # l_recurr2 = RecurrentLayer(l_recurr, num_units=num_units2, learn_init=True)
     # Flatten output of batch and sequence so that each time step
     # of each sequence is processed independently.
     # Didn't understand this part :/
@@ -86,53 +90,60 @@ def build_net(inputVar):
     l_out = ReshapeLayer(l_dense, (batch_size, sequence_length))
 
     return l_out
+for r in range(10):
+    network = build_net(input_var)
+    save_network = build_net(input_var)
 
-network, lstm = build_net(input_var)
-save_network, _ = build_net(input_var)
-
-prediction = lasagne.layers.get_output(network)
-loss = lasagne.objectives.squared_error(prediction, target_var)
-loss = loss.mean()
-
-
-params = lasagne.layers.get_all_params(network, trainable=True)
-updates = lasagne.updates.adagrad(loss, params, learning_rate=0.1)
+    prediction = lasagne.layers.get_output(network)
+    loss = lasagne.objectives.squared_error(prediction, target_var)
+    loss = loss.mean()
 
 
-test_prediction = get_output(network, deterministic=True)
-test_loss = lasagne.objectives.squared_error(test_prediction,
-                                                        target_var)
-test_loss = test_loss.mean()
+    params = lasagne.layers.get_all_params(network, trainable=True)
+    updates = lasagne.updates.adagrad(loss, params, learning_rate=0.1)
 
 
-index = T.scalar(name='index', dtype='int64')
-train_fn = theano.function([input_var, target_var], loss, updates=updates, allow_input_downcast=True)
-val_fn = theano.function([input_var, target_var], test_loss, allow_input_downcast=True)
+    test_prediction = get_output(network, deterministic=True)
+    test_loss = lasagne.objectives.squared_error(test_prediction,
+                                                            target_var)
+    test_loss = test_loss.mean()
 
-num_epochs = 3000
-min_err = float('inf')
-min_epoch = 0
 
-for epoch in range(num_epochs):
-    err = train_fn(full_train, full_targets)
-    if err < min_err:
-        min_epoch = epoch
-        min_err = err
-        set_all_param_values(save_network, get_all_param_values(network))
-    print('Epoch %d, Error %f' % (epoch, err))
+    index = T.scalar(name='index', dtype='int64')
+    train_fn = theano.function([input_var, target_var], loss, updates=updates, allow_input_downcast=True)
+    val_fn = theano.function([input_var, target_var], test_loss, allow_input_downcast=True)
 
-print('Creating Test Network on epoch %d for train error: %f' % (min_epoch, min_err))
-out = get_output(save_network)
-get_it = theano.function([input_var], out, allow_input_downcast=True)
+    num_epochs = 3000
+    min_err = float('inf')
+    min_epoch = 0
+
+    for epoch in range(num_epochs):
+        err = train_fn(full_train, full_targets)
+        if err < min_err:
+            min_epoch = epoch
+            min_err = err
+            set_all_param_values(save_network, get_all_param_values(network))
+        print('Epoch %d, Error %f' % (epoch, err))
+
+    print('Creating Test Network on epoch %d for train error: %f' % (min_epoch, min_err))
+    out = get_output(save_network)
+    get_it = theano.function([input_var], out, allow_input_downcast=True)
+
+
+    got_it[r] = get_it(full_data) * normalizer
+
+mean_p = np.mean(got_it, axis=0)
+variance_p = np.var(got_it, axis=0)
 
 final_error = 0.
 abs_error = 0.
-got_it = get_it(full_data)
+
 with open('Data2/results_2n.txt', 'w') as fw:
     # for i in range(full_train.shape[1]):
     #     if i % 500 == 0:
     for i in range(1, len(ind)):
-        pred = (got_it[0, ind[i]-1] * normalizer)
+        # pred = (got_it[0, ind[i]-1] * normalizer)
+        pred = mean_p[ind[i]]
         error = (pred - evals[i])
         final_error += error ** 2
         abs_error += abs(error)
@@ -144,14 +155,15 @@ mean_abs = abs_error / len(evals)
 print('root mean squared error = %f' % sqrt(mean_final_error))
 print('Absolute error = %f' % mean_abs)
 print('Final Prediction = %f' % (got_it[0, -1] * normalizer))
-print(got_it[0, -5:] * normalizer)
-
+print(final_predictions)
+print('mean: %f and variance: %f' % (mean_p[-1], variance_p[-1]))
 
 plt.plot(full_train[0])
-plt.plot(got_it[0], linestyle='--', color='r')
+plt.plot(mean_p, linestyle='-', color='r')
 plt.show()
 
 plt.clf()
-plt.plot(got_it[0]*normalizer, color='r')
+plt.plot(mean_p, color='r')
+plt.fill_between(range(20000), mean_p - variance_p, mean_p + variance_p, facecolor='#FF9848')
 plt.plot(ind, evals, linestyle='-', color='b')
 plt.show()
