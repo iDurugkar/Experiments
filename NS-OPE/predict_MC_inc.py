@@ -33,8 +33,8 @@ def build_net(inputs):
     l_recurr = GRULayer(l_rshp1,
                         num_units=num_units,
                         learn_init=True,
-                        gradient_steps=gradient_steps,
-                        only_return_final=True)
+                        gradient_steps=gradient_steps)
+                        # only_return_final=True)
     # Flatten output of batch and sequence so that each time step
     # of each sequence is processed independently.
     # Didn't understand this part :/
@@ -100,6 +100,8 @@ for j in range(start_i, end_i):
     full_train = np.copy(dataset[:, :-1])
     full_targets = np.copy(dataset[:, 1:])
     # sequence_size = 2000
+    # train_batch = [dataset[:, :x] for x in range(1000, j-1)]
+    # target_batch = [dataset[:, 1:x+1] for x in range(1000, j-1)]
 
     # p = np.random.permutation(dataset.shape[0])[:20]
     # dataset = dataset.reshape((-1, sequence_size), order='C')
@@ -111,18 +113,15 @@ for j in range(start_i, end_i):
     min_err = float('inf')
     min_epoch = 0
 
-    if j==start_i:
-        num_epochs = 5000
-    else:
-        num_epochs = 1000
+    num_epochs = 1000
     for epoch in range(num_epochs):
         err = train_fn(full_train, full_targets)
         if err < min_err:
             set_all_param_values(save_network, get_all_param_values(network))
             min_err = err
             min_epoch = epoch
-        # print('Epoch %d, Error %f' % (epoch, err))
-        # sys.stdout.flush()
+        print('Epoch %d, Error %f' % (epoch, err))
+        sys.stdout.flush()
 
     # pred_err = val_fn(test, test_targets)
     # print('Test error: %f' % pred_err)
