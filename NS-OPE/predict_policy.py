@@ -12,10 +12,10 @@ from lasagne import nonlinearities
 
 
 import matplotlib.pyplot as plt
-import seaborn as sns
+# import seaborn as sns
 
 
-num_units = 2
+num_units = 5
 num_inputs = 1
 num_outputs = 1
 

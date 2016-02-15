@@ -30,7 +30,7 @@ def build_net(inputs):
     gradient_steps = 500
     # else:
     #     gradient_steps = -1
-    l_recurr = LSTMLayer(l_rshp1, num_units=num_units, learn_init=True, gradient_steps=gradient_steps)
+    l_recurr = GRULayer(l_rshp1, num_units=num_units, learn_init=True, gradient_steps=gradient_steps)
     # Flatten output of batch and sequence so that each time step
     # of each sequence is processed independently.
     # Didn't understand this part :/
@@ -40,20 +40,17 @@ def build_net(inputs):
 
     return l_out
 
-mseFile = 'Data3/mse_MC_prediction_%d_%d.txt' % (start_i, end_i)
+mseFile = 'Data3/mse_ST_prediction_%d_%d.txt' % (start_i, end_i)
 with open(mseFile, 'w') as rf:
     rf.writelines(['Point\tMSE\n'])
-absFile = 'AdobeData/absolute_MC_prediction_%d_%d.txt' % (start_i, end_i)
+absFile = 'Data3/absolute_ST_prediction_%d_%d.txt' % (start_i, end_i)
 with open(absFile, 'w') as ro:
     ro.writelines(['Point\tAbs\n'])
 
-vals = []
 
-with open('Data3/MC_IWRs.txt', 'r') as fr:
-    fr.readline()
-    for line in fr.readlines():
-        parts = line.split()
-        vals.append(float(parts[0]))
+with open('Data3/ST_IWRs.txt', 'r') as fr:
+    vals = [float(x) for x in fr.read().split()]
+
 num_vals = len(vals)
 MSE = 0.
 count = 0
@@ -64,8 +61,8 @@ for j in range(start_i/100, end_i/100):
     dataset = vals[:j*100]
 
     dataset = np.asarray(dataset, dtype=theano.config.floatX)
-    # normalizer = dataset.min() * -1
-    # dataset /= normalizer
+    normalizer = dataset.min() * -1
+    dataset /= normalizer
     dataset = dataset.reshape((1, -1))
     full_train = np.copy(dataset[:, :-1])
     full_targets = np.copy(dataset[:, 1:])
@@ -120,8 +117,8 @@ for j in range(start_i/100, end_i/100):
             set_all_param_values(save_network, get_all_param_values(network))
             min_err = err
             min_epoch = epoch
-        print('Epoch %d, Error %f' % (epoch, err))
-        sys.stdout.flush()
+        # print('Epoch %d, Error %f' % (epoch, err))
+        # sys.stdout.flush()
 
     # pred_err = val_fn(test, test_targets)
     # print('Test error: %f' % pred_err)
@@ -136,12 +133,12 @@ for j in range(start_i/100, end_i/100):
     # plt.show()
     count += 1
 
-    print('Point %d prediction = %f' % (j*100 + 1, (got_it[0, -1])))
+    print('Point %d prediction = %f' % (j*100 + 1, (got_it[0, -1] * normalizer)))
     print('Target: %f' % vals[j*100])
     with open(mseFile, 'a+') as rf:
-        rf.writelines(['%d\t%f\n' % (j*100, (got_it[0, -1] - vals[j*100]) ** 2)])
+        rf.writelines(['%d\t%f\n' % (j*100, (got_it[0, -1] * normalizer - vals[j*100]) ** 2)])
     with open(absFile, 'a+') as rf:
-        rf.writelines(['%d\t%f\n' % (j*100, (got_it[0, -1] - vals[j*100]))])
+        rf.writelines(['%d\t%f\n' % (j*100, (got_it[0, -1] * normalizer - vals[j*100]))])
 
     MSE += (got_it[0, -1] - vals[j*100]) ** 2
     print('MSE after item %d : %f' % (count, (MSE/count)))

@@ -33,17 +33,17 @@ def build_net(inputs):
 
     return l_out
 
-resultsFile = 'Data2/results_basic.txt'
+resultsFile = 'Data1/results_basic_50_99.txt'
 # with open(resultsFile, 'w') as rf:
 #     rf.writelines(['File\tPrediction\n'])
-overallFile = 'Data2/overall_basic.txt'
+overallFile = 'Data1/overall_basic_50_99.txt'
 # with open(overallFile, 'w') as ro:
 #     ro.writelines(['File\tMSE\tAbs\n'])
 
 ind = []
 evals = []
 
-with open('Data2/trueEval.txt', 'r') as fr:
+with open('trueEval.txt', 'r') as fr:
     fr.readline()
     for line in fr.readlines():
         parts = line.split()
@@ -55,12 +55,12 @@ MSE = 0.
 count = 0
 # dataset = []
 
-for root, folder, files in os.walk('Data2/IWRs'):
-    for f_i in range(83,100):
+for root, folder, files in os.walk('Data1/IWRs'):
+    for f_i in range(50,100):
         # for f in files:
         #     if f.startswith('.'):
         #         continue
-        with open('Data2/IWRs/IWRs_out%d.txt' % f_i, 'r') as fp:
+        with open('Data1/IWRs/IWRs_out%d.txt' % f_i, 'r') as fp:
             text = fp.read()
         dataset = [float(tok) for tok in text.split()]
         # break
