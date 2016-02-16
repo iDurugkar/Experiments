@@ -1,8 +1,6 @@
 import numpy as np
 import theano
 import theano.tensor as T
-import os
-import sys
 
 
 from lasagne.layers import *
@@ -12,7 +10,7 @@ __author__ = 'idurugkar'
 
 start_i = 10000  # int(sys.argv[1])
 end_i = 10200  # int(sys.argv[2])
-train_start = 1000
+# train_start = 1000
 num_units = 512
 num_inputs = 1
 num_outputs = 1
@@ -34,7 +32,6 @@ def build_net(inputs):
                         num_units=num_units,
                         learn_init=True,
                         gradient_steps=gradient_steps)
-                        # only_return_final=True)
     # Flatten output of batch and sequence so that each time step
     # of each sequence is processed independently.
     # Didn't understand this part :/
@@ -72,7 +69,7 @@ loss = lasagne.objectives.squared_error(prediction, target_var)
 loss = loss.mean()  # + reg
 
 params = lasagne.layers.get_all_params(network, trainable=True)
-updates = lasagne.updates.adagrad(loss, params, learning_rate=0.1)
+updates = lasagne.updates.adagrad(loss, params, learning_rate=0.03)
 # updates = lasagne.updates.adadelta(loss, params, learning_rate=0.1, rho=0.99)
 
 # generate_output = get_output(network, deterministic=True)
@@ -113,20 +110,24 @@ for j in range(start_i, end_i):
     min_err = float('inf')
     min_epoch = 0
 
-    num_epochs = 1000
+    if j == start_i:
+        num_epochs = 1000
+    else:
+        num_epochs = 50
     for epoch in range(num_epochs):
         err = train_fn(full_train, full_targets)
         if err < min_err:
             set_all_param_values(save_network, get_all_param_values(network))
             min_err = err
             min_epoch = epoch
-        print('Epoch %d, Error %f' % (epoch, err))
-        sys.stdout.flush()
+        # print('Epoch %d, Error %f' % (epoch, err))
+        # sys.stdout.flush()
 
     # pred_err = val_fn(test, test_targets)
     # print('Test error: %f' % pred_err)
 
     print('Generating output based on epoch %d at error: %f' % (min_epoch, min_err))
+    set_all_param_values(network, get_all_param_values(save_network))
     out = get_output(save_network)
     get_it = theano.function([input_var], out, allow_input_downcast=True)
 
